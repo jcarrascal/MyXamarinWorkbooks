@@ -57,7 +57,9 @@ Now, let’s load an image to analyze:
 //string imageFullPath = @"cat.jpg";
 string imageFullPath = @"skater.jpg";
 byte[] imageContents = File.ReadAllBytes(imageFullPath);
-SKBitmap.Decode(imageContents);    // This is just to see the image in Xamarin Workbooks
+
+// This is just to see the image in Xamarin Workbooks
+SKBitmap.Decode(imageContents);
 ```
 
 This is a good time to create the HTTP client to latter make the REST requests:

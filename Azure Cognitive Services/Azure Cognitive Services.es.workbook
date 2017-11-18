@@ -47,7 +47,7 @@ Para empezar, probemos una de las APIs de visión que es capaz de describir una 
 https://azure.microsoft.com/en-us/try/cognitive-services/?api=computer-vision
 
 ```csharp
-string visionSubscriptionKey = "<insert your subscription key>";
+string visionSubscriptionKey = "<inserte su clave de subscripción>";
 ```
 
 Ahora, carguemos una imágen para analizar:
@@ -57,7 +57,9 @@ Ahora, carguemos una imágen para analizar:
 //string imageFullPath = @"cat.jpg";
 string imageFullPath = @"skater.jpg";
 byte[] imageContents = File.ReadAllBytes(imageFullPath);
-SKBitmap.Decode(imageContents);    // Esto es para ver la imagen en Xamarin Workbooks
+
+// Esto es para ver la imagen en Xamarin Workbooks
+SKBitmap.Decode(imageContents);
 ```
 
 Es un buen momento para crear el cliente HTTP que luego hará las peticiones REST:
@@ -121,7 +123,7 @@ La Translator Text API requiere una clave de suscripción diferente. El nivel gr
 https://portal.azure.com/
 
 ```csharp
-string translatorSubscriptionKey = "<insert your subscription key>";
+string translatorSubscriptionKey = "<inserte su clave de subscripción>";
 ```
 
 Cada petición a esta API requiere un JSON Web Token (JWT) para autenticación. El testigo (token) es emitido al publicar la clave a:
