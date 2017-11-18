@@ -1,0 +1,205 @@
+---
+packages:
+- id: Newtonsoft.Json
+  version: 10.0.3
+- id: SkiaSharp
+  version: 1.59.2
+uti: com.xamarin.workbook
+id: 95cb63a3-26d5-4f04-b0c9-20fb0f47b049
+title: Azure Cognitive Services
+platforms:
+- Console
+---
+
+# Azure Cognitive Services
+
+Author: Julio César Carrascal Urquijo @jcarrascal <jcarrascal@gmail.com>
+
+**Azure Cognitive Services** are a set of APIs that provide access to \*\*pre-trained models \*\*that emulate **human senses and though processes**. In this demo we’ll see three of the available services (Computer Vision, Translation and Text-to-Speech).
+
+Let’s suppose that we are building a device for visually impaired people that takes a picture and reads aloud a description of what is in the picture.
+
+I’m going to use the REST API which only requires libraries from the .NET Framework and a few System NuGet packages:
+
+```csharp
+#r "System.Net.Http"
+#r "System.Xml.Linq"
+using System.IO;
+using System.Net.Http;
+using System.Net.Http.Headers;
+using System.Xml.Linq;
+```
+
+However, for demo purposes, I’m also going to include the System.Media namespace, the SkiaSharp library and Newtonsoft.Json to visualize and process data.
+
+```csharp
+#r "SkiaSharp"
+#r "Newtonsoft.Json"
+using System.Media;
+using SkiaSharp;
+using Newtonsoft.Json;
+```
+
+## Computer Vision API
+
+As a start, let’s try one of the Vision APIs which is able to describe an image. First, we need an API key. The free version grants you 5000 transactions per month, 20 per minute. To generate your own key, go to the following URL and click the Get API Key:
+
+https://azure.microsoft.com/en-us/try/cognitive-services/?api=computer-vision
+
+```csharp
+string visionSubscriptionKey = "<insert your subscription key>";
+```
+
+Now, let’s load an image to analyze:
+
+```csharp
+//string imageFullPath = @"dog.jpg";
+//string imageFullPath = @"cat.jpg";
+string imageFullPath = @"skater.jpg";
+byte[] imageContents = File.ReadAllBytes(imageFullPath);
+SKBitmap.Decode(imageContents);    // This is just to see the image in Xamarin Workbooks
+```
+
+This is a good time to create the HTTP client to latter make the REST requests:
+
+```csharp
+var httpClient = new HttpClient();
+```
+
+The subscription key should be added as a request header:
+
+```csharp
+httpClient.DefaultRequestHeaders.Add("Ocp-Apim-Subscription-Key", visionSubscriptionKey);
+```
+
+The request URL contains the parameters of what we want to obtain.
+
+```csharp
+string visionUrl = "https://westcentralus.api.cognitive.microsoft.com/vision/v1.0/analyze" +
+    "?visualFeatures=Tags,Description,Color&language=en";
+```
+
+The image will be sent in the body of the request:
+
+```csharp
+var visionBody = new ByteArrayContent(imageContents);
+visionBody.Headers.ContentType = new MediaTypeHeaderValue("application/octet-stream");
+```
+
+Now we execute the request and retrieve the response as a string:
+
+```csharp
+var visionResponse = await httpClient.PostAsync(visionUrl, visionBody);
+string visionResponseString = await visionResponse.Content.ReadAsStringAsync();
+```
+
+The string is a JSON object. Let’s take a closer look at the JSON we got in return. This is what Azure thinks of the image:
+
+```csharp
+dynamic visionResult = JsonConvert.DeserializeObject(visionResponseString);
+(string)visionResult.description.captions[0].text;
+```
+
+And how confident it is about it:
+
+```csharp
+(double)visionResult.description.captions[0].confidence;
+```
+
+More info on this API here: https://westus.dev.cognitive.microsoft.com/docs/services/56f91f2d778daf23d8ec6739/operations/56f91f2e778daf14a499e1fa
+
+## Translator Text API
+
+The text is in English and the Vision API doesn’t support any other languages yet. I want to translate the text to Spanish. So, let’s try the Translator Text API:
+
+```csharp
+string textToTranslate = (string)visionResult.description.captions[0].text;
+```
+
+The Translator Text API requires a different subscription key. The free tier offers 2 million characters per month. You’ll need to access the Azure portal and create a Translator Text API service from the “New” button.
+
+https://portal.azure.com/
+
+```csharp
+string translatorSubscriptionKey = "<insert your subscription key>";
+```
+
+Every request to this API requires a JSON Web Token (JWT) for authentication. The token is issued by posting the key to:
+
+```csharp
+string translatorTokenUri = "https://api.cognitive.microsoft.com/sts/v1.0/issueToken";
+```
+
+Let’s add the request headers and send the POST request:
+
+```csharp
+
+httpClient.DefaultRequestHeaders.Clear();
+httpClient.DefaultRequestHeaders.Add("Ocp-Apim-Subscription-Key", translatorSubscriptionKey);
+var translatorTokenResult = await httpClient.PostAsync(translatorTokenUri, null);
+string translatorToken = await translatorTokenResult.Content.ReadAsStringAsync();
+```
+
+This token will be valid for the next 10 minutes. Now, we’ll use this token instead of the subscription key.
+
+```csharp
+httpClient.DefaultRequestHeaders.Clear();
+httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", translatorToken);
+```
+
+The request parameters are passed through the URL:
+
+```csharp
+string translatorUri = "https://api.microsofttranslator.com/v2/http.svc/Translate"
+    + $"?from=en&to=es&text=" + textToTranslate.Replace(" ", "%20");
+```
+
+And now we execute the request:
+
+```csharp
+var translatorResponse = await httpClient.GetAsync(translatorUri);
+string translatorResponseString = await translatorResponse.Content.ReadAsStringAsync();
+```
+
+Since this response is in XML, we’ll parse the document to extract the translated string
+
+```csharp
+var document = XDocument.Load(new StringReader(translatorResponseString));
+string textToSpeech = document.Root.Value;
+```
+
+More info on this API here: https://msdn.microsoft.com/en-us/library/ff512421.aspx
+
+## Text to Speech API
+
+The Text to Speech API also requires a JWT for authentication, but we can reuse the one we setup previously. Remember that it is valid for only 10 minutes.
+
+```csharp
+httpClient.DefaultRequestHeaders.Clear();
+httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", translatorToken);
+```
+
+In the request URL we need to set at least two parameters: The language of the text and the text itself.
+
+```csharp
+string speechUri = "http://api.microsofttranslator.com/V2/Http.svc/Speak"
+    + "?language=es-MX&text=" + textToSpeech.Replace(" ", "%20");
+```
+
+Now, execute the request but this time retrieve the response as a byte\[] since it will be a .WAV file.
+
+```csharp
+var speechResponse = await httpClient.GetAsync(speechUri);
+byte[] speechResponseBytes = await speechResponse.Content.ReadAsByteArrayAsync();
+```
+
+Finally, let’s use the .NET Framework SoundPlayer class to hear what we’ve received from Azure:
+
+```csharp
+var player = new SoundPlayer(new MemoryStream(speechResponseBytes));
+player.PlaySync();
+```
+
+More info on this API here: https://msdn.microsoft.com/en-us/library/ff512420.aspx
+
+This Xamarin Workbook was built based on a demo by Edgar Sánchez at https://github.com/edgarsanchez/FunCognitiveServices
